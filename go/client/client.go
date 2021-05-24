@@ -6,6 +6,7 @@ type Client interface {
 	Publish(topic string, payload []byte) error
 	Subscribe(topic string) (<-chan []byte, error)
 	Unsubscribe(<-chan []byte) error
+	Ping(topic string) (bool, error)
 }
 
 // Resolver resolves a name to a list of servers
@@ -23,7 +24,7 @@ var (
 	// The default client
 	Default = New()
 	// The default server list
-	Servers = []string{"http://127.0.0.1:8081"}
+	Servers = []string{"127.0.0.1:8081"}
 	// The default number of retries
 	Retries = 1
 )

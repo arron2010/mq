@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/asim/mq/go/client"
@@ -14,7 +15,7 @@ var (
 	Default Broker = newBroker()
 )
 
-// internal broker
+// 消息管理者内部实现，负责消息存储、分发、订阅。
 type broker struct {
 	exit    chan bool
 	options *Options
@@ -24,6 +25,7 @@ type broker struct {
 
 	mtx       sync.RWMutex
 	persisted map[string]bool
+	counter   uint64
 }
 
 // internal message for persistence
@@ -60,35 +62,18 @@ func newBroker(opts ...Option) *broker {
 }
 
 func (b *broker) publish(payload []byte, subscribers []chan []byte) {
-	n := len(subscribers)
-	c := 1
 
-	// increase concurrency if there are many subscribers
-	switch {
-	case n > 1000:
-		c = 3
-	case n > 100:
-		c = 2
-	}
+	//当存在多个消息订阅者，只要被其中一个订阅者消费了消息，其他订阅者就不能再消费
+	counter := atomic.AddUint64(&b.counter, 1)
+	idx := counter % uint64(len(subscribers))
 
-	// publisher function
-	pub := func(start int) {
-		// iterate the subscribers
-		for j := start; j < n; j += c {
-			select {
-			// push the payload to subscriber
-			case subscribers[j] <- payload:
-			// only wait 5 milliseconds for subscriber
-			case <-time.After(time.Millisecond * 5):
-			case <-b.exit:
-				return
-			}
-		}
-	}
-
-	// concurrent publish
-	for i := 0; i < c; i++ {
-		go pub(i)
+	select {
+	// push the payload to subscriber
+	case subscribers[idx] <- payload:
+		// only wait 5 milliseconds for subscriber
+	case <-time.After(time.Millisecond * 5):
+	case <-b.exit:
+		return
 	}
 }
 

@@ -3,6 +3,7 @@ package client
 import (
 	"crypto/tls"
 	"errors"
+	"github.com/asim/mq/logs"
 	"sync"
 	"time"
 
@@ -31,6 +32,30 @@ type subscriber struct {
 	topic string
 }
 
+func ping(addr string) (bool, error) {
+	var dialOpts []grpc.DialOption
+	var resp *mq.PingMessage
+	creds := credentials.NewTLS(&tls.Config{
+		InsecureSkipVerify: true,
+	})
+	dialOpts = append(dialOpts, grpc.WithTransportCredentials(creds))
+
+	conn, err := grpc.Dial(addr, dialOpts...)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	c := mq.NewMQClient(conn)
+	resp, err = c.Ping(context.TODO(), &mq.PingMessage{})
+	if err != nil {
+		return false, err
+	}
+	if resp.Timestamp == 0 {
+		return false, errors.New("sever unavailable")
+	}
+	logs.Infof("ping timestamp=%d\r\n", resp.Timestamp)
+	return true, nil
+}
 func grpcPublish(addr, topic string, payload []byte) error {
 	var dialOpts []grpc.DialOption
 
@@ -152,7 +177,28 @@ func (c *grpcClient) Close() error {
 	}
 	return nil
 }
-
+func (c *grpcClient) Ping(topic string) (bool, error) {
+	select {
+	case <-c.exit:
+		return false, errors.New("client closed")
+	default:
+	}
+	servers, err := c.options.Selector.Get(topic)
+	if err != nil {
+		return false, err
+	}
+	var grr error
+	var pong bool
+	for _, addr := range servers {
+		for i := 0; i < 1+c.options.Retries; i++ {
+			pong, grr = ping(addr)
+			if pong {
+				break
+			}
+		}
+	}
+	return pong, grr
+}
 func (c *grpcClient) Publish(topic string, payload []byte) error {
 	select {
 	case <-c.exit:

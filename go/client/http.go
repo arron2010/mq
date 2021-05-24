@@ -169,7 +169,9 @@ func (c *httpClient) run() {
 		}
 	}
 }
-
+func (c *httpClient) Ping(topic string) (bool, error) {
+	return true, nil
+}
 func (c *httpClient) Close() error {
 	select {
 	case <-c.exit:

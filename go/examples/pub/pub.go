@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
+	"github.com/asim/mq/go/client"
 	"log"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/asim/mq/go/client"
 )
 
 var (
@@ -20,10 +20,17 @@ func main() {
 		client.WithServers(strings.Split(*servers, ",")...),
 	)
 	tick := time.NewTicker(time.Second)
+	source := `bar-`
+	var count int = 0
 
 	for _ = range tick.C {
-		if err := c.Publish("foo", []byte(`bar`)); err != nil {
+		count++
+		text := source + strconv.Itoa(count)
+		if err := c.Publish("foo", []byte(text)); err != nil {
 			log.Println(err)
+			break
+		}
+		if count == 1 {
 			break
 		}
 	}

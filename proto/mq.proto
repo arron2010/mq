@@ -5,7 +5,13 @@ package mq;
 service MQ {
 	rpc Pub(PubRequest) returns (PubResponse) {}
 	rpc Sub(SubRequest) returns (stream SubResponse) {}
+	rpc Ping(PingMessage)returns (PingMessage){}
 }
+
+message PingMessage{
+	uint64 timestamp = 1;
+}
+
 
 message PubRequest {
 	string topic = 1;

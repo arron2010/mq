@@ -52,7 +52,7 @@ func (g *grpcServer) Run() error {
 	srv := grpc.NewServer(opts...)
 
 	// register MQ server
-	mq.RegisterMQServer(srv, new(handler))
+	mq.RegisterMQServer(srv, &handler{})
 
 	// serve
 	return srv.Serve(l)

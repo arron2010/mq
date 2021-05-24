@@ -2,10 +2,11 @@ package grpc
 
 import (
 	"fmt"
+	"time"
 
+	"context"
 	"github.com/asim/mq/broker"
 	"github.com/asim/mq/proto/grpc/mq"
-	"golang.org/x/net/context"
 )
 
 type handler struct{}
@@ -31,4 +32,10 @@ func (h *handler) Sub(req *mq.SubRequest, stream mq.MQ_SubServer) error {
 	}
 
 	return nil
+}
+
+func (h *handler) Ping(context.Context, *mq.PingMessage) (*mq.PingMessage, error) {
+	msg := &mq.PingMessage{}
+	msg.Timestamp = uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
+	return msg, nil
 }

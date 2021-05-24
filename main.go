@@ -45,7 +45,7 @@ var (
 	// resolver for discovery
 	resolver = flag.String("resolver", "ip", "Server resolver for discovery. Supports ip, dns")
 	// transport http or grpc
-	transport = flag.String("transport", "http", "Transport for communication. Support http, grpc")
+	transport = flag.String("transport", "grpc", "Transport for communication. Support http, grpc")
 )
 
 func init() {
@@ -106,6 +106,8 @@ func init() {
 		broker.Client(bclient),
 		broker.Persist(*persist),
 		broker.Proxy(*client || *proxy || *interactive),
+		broker.ETCDDialTimeout(5*time.Second),
+		broker.ETCDAddresses([]string{"127.0.0.1:2379"}),
 	)
 }
 

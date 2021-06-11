@@ -113,7 +113,9 @@ func subscribe(addr string, s *subscriber) error {
 
 	return nil
 }
-
+func (sa *all) GetEx(topic uint64) ([]string, error) {
+	return nil, nil
+}
 func (sa *all) Get(topic string) ([]string, error) {
 	sa.RLock()
 	if len(sa.servers) == 0 {
@@ -187,7 +189,7 @@ func (c *httpClient) Close() error {
 	return nil
 }
 
-func (c *httpClient) Publish(topic string, payload []byte) error {
+func (c *httpClient) Publish(weight uint64, topic string, payload []byte) error {
 	select {
 	case <-c.exit:
 		return errors.New("client closed")

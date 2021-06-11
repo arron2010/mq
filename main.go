@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/asim/mq/config"
+	"github.com/asim/mq/glogger"
+	"github.com/asim/mq/handler"
 	"log"
 	"os"
 	"strings"
@@ -46,6 +49,8 @@ var (
 	resolver = flag.String("resolver", "ip", "Server resolver for discovery. Supports ip, dns")
 	// transport http or grpc
 	transport = flag.String("transport", "grpc", "Transport for communication. Support http, grpc")
+
+	configFile = flag.String("config", "mq.yml", "Config subscriber")
 )
 
 func init() {
@@ -168,6 +173,40 @@ func cli() {
 
 	wg.Wait()
 }
+func initialize() error {
+	var err error
+	var c *broker.ConsumerManager
+	var dao *config.ConfigDAO
+	err = config.LoadConfig(*configFile)
+	if err != nil {
+		glogger.Errorf("配置信息加载发生错误！")
+		return err
+	}
+	dao, err = config.NewConfigDAO()
+	if err != nil {
+		glogger.Errorf("数据库连接发生错误！")
+		return err
+	}
+
+	broker.CreateDefaultBroker()
+	// cleanup broker
+	defer broker.Default.Close()
+
+	c = broker.NewConsumerManager(dao)
+	if err != nil {
+		glogger.Errorf("消费者启动发生错误！")
+		return err
+	}
+	c.Load()
+
+	err = handler.CreateDBHandler(dao)
+	if err != nil {
+		glogger.Errorf("创建MySQL映射处理者错误！")
+		return err
+	}
+
+	return nil
+}
 
 func main() {
 	// handle client
@@ -176,9 +215,10 @@ func main() {
 		return
 	}
 
-	// cleanup broker
-	defer broker.Default.Close()
-
+	err := initialize()
+	if err != nil {
+		panic(err)
+	}
 	options := []server.Option{
 		server.WithAddress(*address),
 	}

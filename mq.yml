@@ -1,0 +1,2 @@
+# mysql配置
+config_db_addr: root:12345@tcp(127.0.0.1:3306)/configdb

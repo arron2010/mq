@@ -3,7 +3,7 @@ package client
 import (
 	"crypto/tls"
 	"errors"
-	"github.com/asim/mq/logs"
+	"github.com/asim/mq/glogger"
 	"sync"
 	"time"
 
@@ -53,7 +53,7 @@ func ping(addr string) (bool, error) {
 	if resp.Timestamp == 0 {
 		return false, errors.New("sever unavailable")
 	}
-	logs.Infof("ping timestamp=%d\r\n", resp.Timestamp)
+	glogger.Infof("ping timestamp=%d", resp.Timestamp)
 	return true, nil
 }
 func grpcPublish(addr, topic string, payload []byte) error {
@@ -199,14 +199,14 @@ func (c *grpcClient) Ping(topic string) (bool, error) {
 	}
 	return pong, grr
 }
-func (c *grpcClient) Publish(topic string, payload []byte) error {
+func (c *grpcClient) Publish(weight uint64, topic string, payload []byte) error {
 	select {
 	case <-c.exit:
 		return errors.New("client closed")
 	default:
 	}
 
-	servers, err := c.options.Selector.Get(topic)
+	servers, err := c.options.Selector.GetEx(weight)
 	if err != nil {
 		return err
 	}

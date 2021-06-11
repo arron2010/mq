@@ -18,6 +18,10 @@ type Shard struct {
 	servers []string
 }
 
+func (sa *All) GetEx(weight uint64) ([]string, error) {
+	return sa.Get("topic")
+}
+
 func (sa *All) Get(topic string) ([]string, error) {
 	sa.RLock()
 	if len(sa.servers) == 0 {
@@ -34,6 +38,22 @@ func (sa *All) Set(servers ...string) error {
 	sa.servers = servers
 	sa.Unlock()
 	return nil
+}
+func (ss *Shard) GetEx(weight uint64) ([]string, error) {
+	ss.RLock()
+	length := len(ss.servers)
+	if length == 0 {
+		ss.RUnlock()
+		return nil, errors.New("no servers")
+	}
+	if length == 1 {
+		servers := ss.servers
+		ss.RUnlock()
+		return servers, nil
+	}
+	server := ss.servers[weight%uint64(length)]
+	ss.RUnlock()
+	return []string{server}, nil
 }
 
 func (ss *Shard) Get(topic string) ([]string, error) {

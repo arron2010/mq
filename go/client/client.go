@@ -3,7 +3,7 @@ package client
 // Client is the interface provided by this package
 type Client interface {
 	Close() error
-	Publish(topic string, payload []byte) error
+	Publish(weight uint64, topic string, payload []byte) error
 	Subscribe(topic string) (<-chan []byte, error)
 	Unsubscribe(<-chan []byte) error
 	Ping(topic string) (bool, error)
@@ -18,6 +18,7 @@ type Resolver interface {
 type Selector interface {
 	Get(topic string) ([]string, error)
 	Set(servers ...string) error
+	GetEx(weight uint64) ([]string, error)
 }
 
 var (
@@ -31,7 +32,7 @@ var (
 
 // Publish via the default Client
 func Publish(topic string, payload []byte) error {
-	return Default.Publish(topic, payload)
+	return Default.Publish(0, topic, payload)
 }
 
 // Subscribe via the default Client

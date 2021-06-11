@@ -24,9 +24,9 @@ func main() {
 	var count int = 0
 
 	for _ = range tick.C {
-		count++
+		//count++
 		text := source + strconv.Itoa(count)
-		if err := c.Publish("foo", []byte(text)); err != nil {
+		if err := c.Publish(0, "foo", []byte(text)); err != nil {
 			log.Println(err)
 			break
 		}

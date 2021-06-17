@@ -5,10 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/asim/mq/proto"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go/hack"
+	proto2 "github.com/wj596/go-mysql-transfer/proto"
 	"math"
 	"strconv"
 	"time"
@@ -57,7 +57,7 @@ func isBitSet(bitmap []byte, i int) bool {
 	return bitmap[i>>3]&(1<<(uint(i)&7)) > 0
 }
 
-func DecodeProtoRow(row *proto.Row) ([][]interface{}, error) {
+func DecodeProtoRow(row *proto2.Row) ([][]interface{}, error) {
 	needBitmap2 := false
 	if row.NeedBitmap2 > 0 {
 		needBitmap2 = true
@@ -79,23 +79,21 @@ func DecodeRows(data []byte,
 	var row []interface{}
 
 	for pos < len(data) {
-		n, row, err = decodeRows(data, columnCount, columnBitmap1, columnType, columnMeta,
+		n, row, err = decodeRows(data[pos:], columnCount, columnBitmap1, columnType, columnMeta,
 			false, true, false, nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		pos += n
-		rows = append(rows, row)
 
 		if needBitmap2 {
-			n, row, err = decodeRows(data, columnCount, columnBitmap2, columnType, columnMeta,
+			n, row, err = decodeRows(data[pos:], columnCount, columnBitmap2, columnType, columnMeta,
 				false, true, false, nil)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			pos += n
-			rows = append(rows, row)
 		}
+		pos += n
+		rows = append(rows, row)
 	}
 	return rows, nil
 }

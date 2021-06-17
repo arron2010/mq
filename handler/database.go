@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/asim/mq/config"
-	"github.com/asim/mq/proto"
+	"github.com/asim/mq/logs"
+	"github.com/siddontang/go-mysql/schema"
+
 	"github.com/pingcap/errors"
+	proto2 "github.com/wj596/go-mysql-transfer/proto"
 	"reflect"
 	"strings"
 	"sync"
@@ -15,7 +18,10 @@ var once sync.Once
 var _dbHandler *DBHandler
 
 type DBHandler struct {
-	conns map[string]*sql.DB
+	conns        map[string]*sql.DB
+	strategies   map[string]*config.Strategy
+	sourceTables map[string]*schema.Table
+	srcConns     map[string]*sql.DB
 }
 
 func GetDBHandler() *DBHandler {
@@ -24,13 +30,23 @@ func GetDBHandler() *DBHandler {
 
 func CreateDBHandler(dao *config.ConfigDAO) error {
 	_dbHandler = &DBHandler{}
+	_dbHandler.conns = make(map[string]*sql.DB)
+	_dbHandler.srcConns = make(map[string]*sql.DB)
+
+	_dbHandler.strategies = make(map[string]*config.Strategy)
+	_dbHandler.sourceTables = make(map[string]*schema.Table)
+
 	dbList, err := dao.GetDBInfo()
-	_dbHandler.conns = make(map[string]*sql.DB, len(dbList))
+
 	if err != nil {
 		return err
 	}
-	config := config.GetConfig()
+	cfg := config.GetConfig()
 	for _, dbInfo := range dbList {
+		if dbInfo.DBType != config.SOURCE_DB_TYPE && dbInfo.DBType != config.DEST_DB_TYPE {
+			continue
+		}
+
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s",
 			dbInfo.User,
 			dbInfo.Password,
@@ -39,36 +55,129 @@ func CreateDBHandler(dao *config.ConfigDAO) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		db.SetMaxOpenConns(config.MaxIdleConns)
-		db.SetMaxIdleConns(config.MaxIdleConns)
-		_dbHandler.conns[dbInfo.Name] = db
+		db.SetMaxOpenConns(cfg.MaxIdleConns)
+		db.SetMaxIdleConns(cfg.MaxIdleConns)
+		if dbInfo.DBType == config.DEST_DB_TYPE {
+			_dbHandler.conns[dbInfo.Name] = db
+		} else {
+			_dbHandler.srcConns[dbInfo.Name] = db
+		}
+	}
+	strategyList, err := dao.GetAllStrategies()
+	if err != nil {
+		return err
+	}
+
+	for _, s := range strategyList {
+		pathInfo := strings.Split(s.Path, "/")
+		if len(pathInfo) != 4 {
+			return errors.New(s.Path + "源表路径格式不正确")
+		}
+		currDB, ok := _dbHandler.srcConns[pathInfo[1]]
+		if !ok {
+			return errors.New(pathInfo[1] + "数据库不存在")
+		}
+		tbl, err := schema.NewTableFromSqlDB(currDB, pathInfo[2], pathInfo[3])
+		if err != nil {
+			return err
+		}
+		_dbHandler.sourceTables[s.Path] = tbl
+		_dbHandler.strategies[s.Path] = s
+
 	}
 	return nil
 }
+func (h *DBHandler) handle(topic string, rows [][]interface{}, row *proto2.Row) error {
 
-func (h *DBHandler) Insert(rows []interface{}, row *proto.Row, tableMapping *config.TableMapping) error {
-	var sql string
-	switch tableMapping.MappingType {
-	case config.PART_MAPPING:
-		sql = h.buildInsertSql(row.Columns, tableMapping.Columns, tableMapping.Dest)
-	default:
-		sql = h.buildFullInsertSql(row.Columns, tableMapping.DB, tableMapping.Dest)
+	tableMapping, ok := h.getStrategy(topic)
+	if !ok {
+		return errors.New(topic + "找不到映射策略")
 	}
-	err := h.executeSql(tableMapping.Server, sql, rows)
+
+	tbl, ok := h.sourceTables[topic]
+	if !ok {
+		return errors.New(topic + "找不到源表信息")
+	}
+
+	var err error
+	l := len(rows)
+	switch row.Action {
+	case InsertAction:
+		for i := 0; i < l; i++ {
+			err = h.insert(rows[i], tableMapping, tbl)
+			if err != nil {
+				logs.Errorf("【%s】插入失败，数据:%v\n", topic, rows[i])
+			}
+		}
+	case UpdateAction:
+		for i := 0; i < l; i++ {
+			if (i+1)%2 == 0 {
+				old := rows[i-1]
+				curr := rows[i]
+				err = h.update(old, curr, tbl, tableMapping)
+				if err != nil {
+					logs.Errorf("【%s】更新失败，数据:%v\n", topic, rows[i])
+				}
+			}
+		}
+	case DeleteAction:
+		for i := 0; i < l; i++ {
+			err = h.delete(rows[i], tbl, tableMapping)
+			if err != nil {
+				logs.Errorf("【%s】删除失败，数据:%v\n", topic, rows[i])
+			}
+		}
+	}
 	return err
 }
 
-func (h *DBHandler) Delete(rows []interface{}, row *proto.Row, tableMapping *config.TableMapping) error {
-	return nil
+/*
+插入数据
+*/
+func (h *DBHandler) insert(rows []interface{}, tableMapping *config.Strategy, tbl *schema.Table) error {
+	var sql string
+
+	switch tableMapping.MappingType {
+	case config.PART_MAPPING:
+		sql = h.buildInsertSql(tbl, tableMapping.Columns, tableMapping.DestTable)
+	default:
+		sql = h.buildFullInsertSql(tbl, tableMapping.DestDB, tableMapping.DestTable)
+	}
+	err := h.executeSql(tableMapping.DestServer, sql, rows)
+	if err != nil {
+		logs.Errorf("Insert处理 | Topic:%s | SQL:%s | Values:%v | Error:%v", tableMapping.Path, sql, rows, err)
+	}
+	logs.Infof("Insert处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, rows)
+
+	return err
 }
 
-func (h *DBHandler) Update(old []interface{}, curr []interface{}, row *proto.Row, tableMapping *config.TableMapping) error {
+func (h *DBHandler) delete(rows []interface{}, tbl *schema.Table, tableMapping *config.Strategy) error {
+	var sql string
+	pkLen := len(tbl.PKColumns)
+	values := make([]interface{}, 0, pkLen)
+	pkCols := make([]string, pkLen, pkLen)
+	for i := 0; i < pkLen; i++ {
+		index := tbl.PKColumns[i]
+		pkCols[i] = "`" + tbl.Columns[index].Name + "`" + "=?"
+		values = append(values, rows[index])
+	}
+
+	sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s",
+		tableMapping.DestDB,
+		tableMapping.DestTable,
+		strings.Join(pkCols, "AND"))
+	err := h.executeSql(tableMapping.DestServer, sql, values)
+	return err
+}
+
+func (h *DBHandler) update(old []interface{}, curr []interface{}, tbl *schema.Table, tableMapping *config.Strategy) error {
 	var sql string
 	oldLen := len(old)
 	currLen := len(curr)
 	if oldLen != currLen {
-		return errors.New(fmt.Sprintf(" %s/%s/%s新旧记录长度不一致 旧记录:%v 新记录:%v",
-			row.Server, row.DB, row.Table,
+		return errors.New(fmt.Sprintf(" %s 新旧记录长度不一致 旧记录:%v 新记录:%v",
+			tableMapping.Path,
 			old, curr))
 	}
 	colNames := make([]string, 0, oldLen)
@@ -80,7 +189,7 @@ func (h *DBHandler) Update(old []interface{}, curr []interface{}, row *proto.Row
 	default:
 		for i := 0; i < oldLen; i++ {
 			if !reflect.DeepEqual(old[i], curr[i]) {
-				colNames = append(colNames, row.Columns[i].Name+"=?")
+				colNames = append(colNames, "`"+tbl.Columns[i].Name+"`"+"=?")
 				values = append(values, curr[i])
 			}
 		}
@@ -88,33 +197,37 @@ func (h *DBHandler) Update(old []interface{}, curr []interface{}, row *proto.Row
 	if len(colNames) == 0 {
 		return nil
 	}
-	pkLen := len(row.PKColumns)
+	pkLen := len(tbl.PKColumns)
 	pkCols := make([]string, pkLen, pkLen)
 	for i := 0; i < pkLen; i++ {
-		index := int(row.PKColumns[i])
-		pkCols[i] = row.Columns[index].Name + "=?"
+		index := tbl.PKColumns[i]
+		pkCols[i] = "`" + tbl.Columns[index].Name + "`" + "=?"
 		values = append(values, curr[index])
 	}
 
-	sql = fmt.Sprintf("UPDATE %s SET %s WHERE %s=?",
-		tableMapping.Dest,
+	sql = fmt.Sprintf("UPDATE `%s`.`%s` SET %s WHERE %s",
+		tableMapping.DestDB,
+		tableMapping.DestTable,
 		strings.Join(colNames, ","),
 		strings.Join(pkCols, "AND"))
-
-	err := h.executeSql(tableMapping.Server, sql, values)
+	err := h.executeSql(tableMapping.DestServer, sql, values)
+	if err != nil {
+		logs.Errorf("Update处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, values)
+	}
+	logs.Infof("Update处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, values)
 	return err
 }
 
 /*
 生成全映射Insert SQL 字段名称、字段数据类型等各种属性与目标表保持一致
 */
-func (h *DBHandler) buildFullInsertSql(cols []*proto.ColumnInfo, db string, table string) string {
+func (h *DBHandler) buildFullInsertSql(tbl *schema.Table, db string, table string) string {
 
-	l := len(cols)
+	l := len(tbl.Columns)
 	colNames := make([]string, 0, l)
 	values := make([]string, 0, l)
 	for i := 0; i < l; i++ {
-		colNames = append(colNames, "`"+cols[i].Name+"`")
+		colNames = append(colNames, "`"+tbl.Columns[i].Name+"`")
 		values = append(values, "?")
 
 	}
@@ -148,9 +261,14 @@ func (h *DBHandler) executeSql(db string, sql string, values []interface{}) erro
 	return nil
 }
 
+func (h *DBHandler) getStrategy(topic string) (*config.Strategy, bool) {
+	s, ok := h.strategies[topic]
+	return s, ok
+}
+
 /*
 生成部分映射SQL,暂时预留
 */
-func (h *DBHandler) buildInsertSql(cols []*proto.ColumnInfo, mappingCols []*config.ColumnMapping, table string) string {
+func (h *DBHandler) buildInsertSql(tbl *schema.Table, mappingCols []*config.ColumnStrategy, table string) string {
 	panic("生成部分映射SQL，暂时未实现")
 }

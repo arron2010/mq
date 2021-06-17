@@ -3,7 +3,6 @@ package broker
 import (
 	"encoding/json"
 	"errors"
-	"github.com/asim/mq/glogger"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -45,11 +44,9 @@ type Broker interface {
 	Unsubscribe(topic string, sub <-chan []byte) error
 }
 
-func CreateDefaultBroker(opts ...Option) {
-	once.Do(func() {
-		Default = newBroker(opts...)
-	})
-}
+//func CreateDefaultBroker(opts ...Option) {
+//		Default = newBroker(opts...)
+//}
 func newBroker(opts ...Option) *broker {
 	options := new(Options)
 	for _, o := range opts {
@@ -154,7 +151,7 @@ func (b *broker) Close() error {
 }
 
 func (b *broker) Publish(topic string, payload []byte) error {
-	glogger.Infof("收到消息>> 主题:%s  大小:%d\n", topic, len(payload))
+	//glogger.Infof("收到消息>> 主题:%s  大小:%d\n", topic, len(payload))
 	select {
 	case <-b.exit:
 		return errors.New("broker closed")

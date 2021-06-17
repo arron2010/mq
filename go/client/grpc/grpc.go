@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/asim/mq/go/client"
 	"github.com/asim/mq/go/client/selector"
 	"github.com/asim/mq/proto/grpc/mq"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -46,7 +46,7 @@ func ping(addr string) (bool, error) {
 	}
 	defer conn.Close()
 	c := mq.NewMQClient(conn)
-	resp, err = c.Ping(context.TODO(), &mq.PingMessage{})
+	resp, err = c.Ping(context.Background(), &mq.PingMessage{})
 	if err != nil {
 		return false, err
 	}

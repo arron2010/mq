@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/asim/mq/config"
-	"github.com/asim/mq/glogger"
 	"github.com/asim/mq/handler"
+	"github.com/asim/mq/logs"
 	"log"
 	"os"
 	"strings"
@@ -114,6 +114,12 @@ func init() {
 		broker.ETCDDialTimeout(5*time.Second),
 		broker.ETCDAddresses([]string{"127.0.0.1:2379"}),
 	)
+	/*初始化消费者和配置信息*/
+	err := initialize()
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func cli() {
@@ -179,31 +185,26 @@ func initialize() error {
 	var dao *config.ConfigDAO
 	err = config.LoadConfig(*configFile)
 	if err != nil {
-		glogger.Errorf("配置信息加载发生错误！")
-		return err
+		panic(err)
 	}
+	logs.Initialize(config.GetConfig().LogFile)
 	dao, err = config.NewConfigDAO()
 	if err != nil {
-		glogger.Errorf("数据库连接发生错误！")
+		logs.Errorf("数据库连接发生错误！")
 		return err
 	}
-
-	broker.CreateDefaultBroker()
-	// cleanup broker
-	defer broker.Default.Close()
-
-	c = broker.NewConsumerManager(dao)
-	if err != nil {
-		glogger.Errorf("消费者启动发生错误！")
-		return err
-	}
-	c.Load()
 
 	err = handler.CreateDBHandler(dao)
 	if err != nil {
-		glogger.Errorf("创建MySQL映射处理者错误！")
+		logs.Errorf("创建MySQL映射处理者错误！")
 		return err
 	}
+	c = broker.NewConsumerManager(dao)
+	if err != nil {
+		logs.Errorf("消费者启动发生错误！")
+		return err
+	}
+	c.Load()
 
 	return nil
 }
@@ -215,10 +216,9 @@ func main() {
 		return
 	}
 
-	err := initialize()
-	if err != nil {
-		panic(err)
-	}
+	// cleanup broker
+	defer broker.Default.Close()
+
 	options := []server.Option{
 		server.WithAddress(*address),
 	}

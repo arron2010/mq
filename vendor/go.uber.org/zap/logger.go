@@ -256,7 +256,7 @@ func (log *Logger) clone() *Logger {
 func (log *Logger) check(lvl zapcore.Level, msg string) *zapcore.CheckedEntry {
 	// check must always be called directly by a method in the Logger interface
 	// (e.g., Check, Info, Fatal).
-	const callerSkipOffset = 2
+	const callerSkipOffset = 3
 
 	// Check the level first to reduce the cost of disabled log calls.
 	// Since Panic and higher may exit, we skip the optimization for those levels.

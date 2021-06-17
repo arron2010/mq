@@ -36,8 +36,6 @@ func init() {
 	Global = logging
 
 	logger = Global.Logger("flogging")
-	//grpcLogger := Global.ZapLogger("grpc")
-	//grpclog.SetLogger(NewGRPCLogger(grpcLogger))
 }
 
 // Init initializes logging with the provided config.

@@ -1,2 +1,5 @@
 # mysql配置
 config_db_addr: root:12345@tcp(127.0.0.1:3306)/configdb
+max_open_conns: 100
+max_idle_conns: 50
+log_file_path: /opt/mqlog.txt

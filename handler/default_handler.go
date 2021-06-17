@@ -3,8 +3,7 @@ package handler
 import (
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/encoding"
-	"github.com/asim/mq/glogger"
-	"github.com/asim/mq/proto"
+	proto2 "github.com/wj596/go-mysql-transfer/proto"
 )
 
 const (
@@ -18,7 +17,7 @@ const (
 )
 
 type Processor interface {
-	Process(topic string, row *proto.Row) error
+	Process(topic string, row *proto2.Row) error
 }
 
 type DefaultHandler struct {
@@ -33,47 +32,14 @@ func NewDefaultHandler(dao *config.ConfigDAO) Processor {
 
 	return h
 }
-func (h *DefaultHandler) Process(topic string, row *proto.Row) error {
+func (h *DefaultHandler) Process(topic string, row *proto2.Row) error {
 	var err error
-	var tableMapping *config.TableMapping
-	var rows [][]interface{}
-	tableMapping, err = h.dao.GetTableMapping(topic)
-	if err != nil {
-		return err
-	}
-	rows, err = encoding.DecodeProtoRow(row)
-	if err != nil {
-		return err
-	}
-	l := len(rows)
-	switch row.Action {
-	case InsertAction:
-		for i := 0; i < l; i++ {
-			err = h.dbHandler.Insert(rows[i], row, tableMapping)
-			if err != nil {
-				glogger.Errorf("【%s】插入失败，数据:%v\n", topic, rows[i])
-			}
-		}
-	case UpdateAction:
-		for i := 0; i < l; i++ {
-			if (i+1)%2 == 0 {
-				old := rows[i-1]
-				curr := rows[i]
-				err = h.dbHandler.Update(old, curr, row, tableMapping)
-				if err != nil {
-					glogger.Errorf("【%s】更新失败，数据:%v\n", topic, rows[i])
-				}
-			}
-		}
-	case DeleteAction:
-		for i := 0; i < l; i++ {
-			err = h.dbHandler.Delete(rows[i], row, tableMapping)
-			if err != nil {
-				glogger.Errorf("【%s】删除失败，数据:%v\n", topic, rows[i])
-			}
-		}
-	}
-	glogger.Infof("Receive : %v\n", rows)
 
-	return err
+	var dataRows [][]interface{}
+
+	dataRows, err = encoding.DecodeProtoRow(row)
+	if err != nil {
+		return err
+	}
+	return h.dbHandler.handle(topic, dataRows, row)
 }

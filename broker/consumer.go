@@ -2,11 +2,11 @@ package broker
 
 import (
 	"github.com/asim/mq/config"
-	"github.com/asim/mq/glogger"
-	"github.com/asim/mq/handler"
-	proto2 "github.com/golang/protobuf/proto"
 
-	"github.com/asim/mq/proto"
+	"github.com/asim/mq/handler"
+	"github.com/asim/mq/logs"
+	"github.com/golang/protobuf/proto"
+	proto2 "github.com/wj596/go-mysql-transfer/proto"
 )
 
 func NewConsumer(topic string) *Consumer {
@@ -28,21 +28,25 @@ func (c *Consumer) Run() {
 	go func() {
 		ch, err := c.broker.Subscribe(c.topic)
 		if err != nil {
-			glogger.Errorf("%s 消费者启动失败:%v", c.topic, err)
+			logs.Errorf("%s 消费者启动失败:%v", c.topic, err)
 		}
-		glogger.Infof("%s 消费者已启动", c.topic)
+		logs.Infof("%s 消费者已启动", c.topic)
 
 		for {
 			select {
 			case payload := <-ch:
-				var row *proto.Row
-				row = &proto.Row{}
-				err = proto2.Unmarshal(payload, row)
+				var row *proto2.Row
+				row = &proto2.Row{}
+				logs.Infof("Consumer收到消息 主题:%s  大小:%d\n", c.topic, len(payload))
+
+				err = proto.Unmarshal(payload, row)
 				if err != nil {
-					glogger.Errorf("主题[%s] 消费者序列化失败:%v", c.topic, err)
+					logs.Errorf("主题[%s] 消费者序列化失败:%v", c.topic, err)
 				} else {
 					err := c.rowHandler.Process(c.topic, row)
-					glogger.Errorf("主题[%s] 处理数据失败:%v", c.topic, err)
+					if err != nil {
+						logs.Errorf("主题[%s] 处理数据失败:%v", c.topic, err)
+					}
 				}
 			case <-c.stop:
 				return

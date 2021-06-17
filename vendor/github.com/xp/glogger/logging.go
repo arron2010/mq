@@ -7,16 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 package glogger
 
 import (
-	"github.com/asim/mq/glogger/logext"
-	//"com.neep/goplatform/glogger/logext"
-	"github.com/asim/mq/glogger/logstyle"
+	"github.com/op/go-logging"
+	"github.com/xp/glogger/logext"
+	"github.com/xp/glogger/logstyle"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io"
 	"os"
 	"sync"
-
-	"github.com/op/go-logging"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	//
 )
 
 var LogPath string = ""

@@ -61,19 +61,12 @@ func TestDBHandler_Insert(t *testing.T) {
 	fmt.Println("自动生成ID-->", id)
 	row := &proto.Row{}
 	row.PKColumns = []uint32{0}
-	row.Columns = []*proto.ColumnInfo{
-		{Name: "id", IsAuto: 1},
-		{Name: "name"},
-		{Name: "desc"},
-		{Name: "a"},
-		{Name: "b"},
-		{Name: "c"},
-	}
+
 	//tableMapping := &config.Strategy{DestTable: "t_user3", DestServer: "test", DestDB: "eseap2"}
 	topic := "/test1/eseap/t_user"
 	tableMapping, _ := handler.getStrategy(topic)
 	tbl, _ := handler.sourceTables[topic]
-	err = handler.insert(rows, tableMapping, tbl)
+	err = handler.insert(rows, 6, tableMapping, tbl)
 	if err != nil {
 		logs.Errorf("CreateDBHandler错误:%v\n", err)
 	}
@@ -109,14 +102,14 @@ func TestDBHandler_Update(t *testing.T) {
 	newRow := []interface{}{id, "a1", "b1", 101, 12.35, t1}
 	row := &proto.Row{}
 	row.PKColumns = []uint32{0}
-	row.Columns = []*proto.ColumnInfo{
-		{Name: "id", IsAuto: 1},
-		{Name: "name"},
-		{Name: "desc"},
-		{Name: "a"},
-		{Name: "b"},
-		{Name: "c"},
-	}
+	//row.Columns = []*proto.ColumnInfo{
+	//	{Name: "id", IsAuto: 1},
+	//	{Name: "name"},
+	//	{Name: "desc"},
+	//	{Name: "a"},
+	//	{Name: "b"},
+	//	{Name: "c"},
+	//}
 	topic := "/test1/eseap/t_user"
 	tableMapping, _ := handler.getStrategy(topic)
 	tbl, _ := handler.sourceTables[topic]

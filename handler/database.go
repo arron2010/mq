@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/logs"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/go-mysql-org/go-mysql/schema"
 
 	"github.com/pingcap/errors"
 	proto2 "github.com/wj596/go-mysql-transfer/proto"
@@ -69,15 +69,15 @@ func CreateDBHandler(dao *config.ConfigDAO) error {
 	}
 
 	for _, s := range strategyList {
-		pathInfo := strings.Split(s.Path, "/")
-		if len(pathInfo) != 4 {
+		server, db, table := config.TableInfo(s.Path)
+		if len(table) == 0 {
 			return errors.New(s.Path + "源表路径格式不正确")
 		}
-		currDB, ok := _dbHandler.srcConns[pathInfo[1]]
+		currDB, ok := _dbHandler.srcConns[server]
 		if !ok {
-			return errors.New(pathInfo[1] + "数据库不存在")
+			return errors.New(server + "数据库不存在")
 		}
-		tbl, err := schema.NewTableFromSqlDB(currDB, pathInfo[2], pathInfo[3])
+		tbl, err := schema.NewTableFromSqlDB(currDB, db, table)
 		if err != nil {
 			return err
 		}
@@ -104,7 +104,7 @@ func (h *DBHandler) handle(topic string, rows [][]interface{}, row *proto2.Row) 
 	switch row.Action {
 	case InsertAction:
 		for i := 0; i < l; i++ {
-			err = h.insert(rows[i], tableMapping, tbl)
+			err = h.insert(rows[i], int(row.ColumnCount), tableMapping, tbl)
 			if err != nil {
 				logs.Errorf("【%s】插入失败，数据:%v\n", topic, rows[i])
 			}
@@ -134,14 +134,14 @@ func (h *DBHandler) handle(topic string, rows [][]interface{}, row *proto2.Row) 
 /*
 插入数据
 */
-func (h *DBHandler) insert(rows []interface{}, tableMapping *config.Strategy, tbl *schema.Table) error {
+func (h *DBHandler) insert(rows []interface{}, columnCount int, tableMapping *config.Strategy, tbl *schema.Table) error {
 	var sql string
 
 	switch tableMapping.MappingType {
 	case config.PART_MAPPING:
 		sql = h.buildInsertSql(tbl, tableMapping.Columns, tableMapping.DestTable)
 	default:
-		sql = h.buildFullInsertSql(tbl, tableMapping.DestDB, tableMapping.DestTable)
+		sql = h.buildFullInsertSql(columnCount, tbl, tableMapping.DestDB, tableMapping.DestTable)
 	}
 	err := h.executeSql(tableMapping.DestServer, sql, rows)
 	if err != nil {
@@ -168,6 +168,10 @@ func (h *DBHandler) delete(rows []interface{}, tbl *schema.Table, tableMapping *
 		tableMapping.DestTable,
 		strings.Join(pkCols, "AND"))
 	err := h.executeSql(tableMapping.DestServer, sql, values)
+	if err != nil {
+		logs.Errorf("Delete处理 | Topic:%s | SQL:%s | Values:%v | Error:%v\n", tableMapping.Path, sql, values, err)
+	}
+	logs.Infof("Delete处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, rows)
 	return err
 }
 
@@ -212,7 +216,7 @@ func (h *DBHandler) update(old []interface{}, curr []interface{}, tbl *schema.Ta
 		strings.Join(pkCols, "AND"))
 	err := h.executeSql(tableMapping.DestServer, sql, values)
 	if err != nil {
-		logs.Errorf("Update处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, values)
+		logs.Errorf("Update处理 | Topic:%s | SQL:%s | Values:%v | Error:%v\n", tableMapping.Path, sql, values, err)
 	}
 	logs.Infof("Update处理 | Topic:%s | SQL:%s | Values:%v\n", tableMapping.Path, sql, values)
 	return err
@@ -221,15 +225,14 @@ func (h *DBHandler) update(old []interface{}, curr []interface{}, tbl *schema.Ta
 /*
 生成全映射Insert SQL 字段名称、字段数据类型等各种属性与目标表保持一致
 */
-func (h *DBHandler) buildFullInsertSql(tbl *schema.Table, db string, table string) string {
+func (h *DBHandler) buildFullInsertSql(columnCount int, tbl *schema.Table, db string, table string) string {
 
-	l := len(tbl.Columns)
+	l := columnCount
 	colNames := make([]string, 0, l)
 	values := make([]string, 0, l)
 	for i := 0; i < l; i++ {
 		colNames = append(colNames, "`"+tbl.Columns[i].Name+"`")
 		values = append(values, "?")
-
 	}
 	sql := fmt.Sprintf("INSERT INTO `%s` .`%s` (%s) VALUES(%s)", db, table,
 		strings.Join(colNames, ","),
@@ -244,6 +247,7 @@ func (h *DBHandler) isPKColumn(index int, cols []uint32) bool {
 	}
 	return false
 }
+
 func (h *DBHandler) executeSql(db string, sql string, values []interface{}) error {
 	conn, ok := h.conns[db]
 	if !ok {

@@ -17,22 +17,22 @@ const (
 )
 
 type Processor interface {
-	Process(topic string, row *proto2.Row) error
+	Process(topic string, conflictStrategy string, row *proto2.Row) error
 }
 
-type DefaultHandler struct {
+type DefaultProcessor struct {
 	dao       *config.ConfigDAO
 	dbHandler *DBHandler
 }
 
-func NewDefaultHandler(dao *config.ConfigDAO) Processor {
-	h := &DefaultHandler{}
+func NewDefaultProcessor(dao *config.ConfigDAO) Processor {
+	h := &DefaultProcessor{}
 	h.dao = dao
-	h.dbHandler = GetDBHandler()
 
+	h.dbHandler = GetDBHandler()
 	return h
 }
-func (h *DefaultHandler) Process(topic string, row *proto2.Row) error {
+func (h *DefaultProcessor) Process(topic string, conflictStrategy string, row *proto2.Row) error {
 	var err error
 
 	var dataRows [][]interface{}

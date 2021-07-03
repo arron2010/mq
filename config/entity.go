@@ -10,6 +10,10 @@ const (
 
 	SOURCE_DB_TYPE = "10"
 	DEST_DB_TYPE   = "20"
+
+	IGNORE_CONFLICT   = "10"
+	USE_CONFLICT      = "20"
+	OVERRIDE_CONFLICT = "30"
 )
 
 type Config struct {
@@ -17,6 +21,7 @@ type Config struct {
 	MaxOpenConns int    `yaml:"max_open_conns"`
 	MaxIdleConns int    `yaml:"max_idle_conns"`
 	LogFile      string `yaml:"log_file_path"`
+	Peers        string `yaml:"peers"`
 }
 
 /*
@@ -39,7 +44,11 @@ type SourceTable struct {
 	Server string
 	DB     string
 	Table  string
-	/*源表处理者，用来路由源表数据处理者*/
+	/*当数据从源表到目标表，数据写入发生冲突时，如何解决
+	10:忽略冲突, 直接用冲突记录
+	20:遇到冲突, 覆盖冲突记录
+	30
+	*/
 	Handler string
 	Path    string
 }
@@ -48,8 +57,10 @@ type SourceTable struct {
 映射信息
 */
 type Strategy struct {
+	/* 源表路径*/
 	Path string
-
+	/* 目标表路径*/
+	DestPath string
 	/*目标表名*/
 	DestTable string
 	/*目标数据库*/
@@ -64,20 +75,21 @@ type Strategy struct {
 	Content string
 }
 
-func TableInfo(path string) (db string, table string) {
+func TableInfo(path string) (server string, db string, table string) {
 	eles := strings.Split(path, "/")
 	l := len(eles)
 	switch l {
-	case 1:
-		db = eles[0]
 	case 2:
-		db = eles[0]
-		table = eles[1]
+		server = eles[1]
 	case 3:
-		db = "/" + eles[0] + "/" + eles[1]
-		table = eles[2]
+		server = eles[1]
+		db = eles[2]
+	case 4:
+		server = eles[1]
+		db = eles[2]
+		table = eles[3]
 	}
-	return db, table
+	return server, db, table
 }
 
 type ColumnStrategy struct {

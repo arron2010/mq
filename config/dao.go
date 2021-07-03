@@ -2,9 +2,9 @@ package config
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/asim/mq/logs"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/pingcap/errors"
 )
 
 const (
@@ -22,17 +22,7 @@ type ConfigDAO struct {
 }
 
 func NewConfigDAO() (*ConfigDAO, error) {
-
 	dao := &ConfigDAO{}
-
-	config := GetConfig()
-	db, err := sql.Open("mysql", config.ConfigDBAddr)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(5)
-	dao.db = db
 	DAO = dao
 	return dao, nil
 }
@@ -46,13 +36,17 @@ func (c *ConfigDAO) GetConfig() *Config {
 */
 func (c *ConfigDAO) GetTableInfo() []*SourceTable {
 
-	rows, err := c.db.Query(`select server_,db_, table_,handler_ ,path_ from t_config_table where deleted_="0"`)
+	db, err := sql.Open("mysql", GetConfig().ConfigDBAddr)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+	rows, err := db.Query(`select server_,db_, table_,handler_ ,path_ from t_config_strategy where deleted_="0"`)
 	if err != nil {
 		logs.Errorf("获取TableSyncInfo错误:%v\n", err)
 		return nil
 	}
 
-	defer rows.Close()
 	tables := make([]*SourceTable, 0, 8)
 	for rows.Next() {
 		t := &SourceTable{}
@@ -63,29 +57,44 @@ func (c *ConfigDAO) GetTableInfo() []*SourceTable {
 		}
 		tables = append(tables, t)
 	}
+	rows.Close()
 	return tables
+}
+func (c *ConfigDAO) GetDestDBInfo() ([]*DBInfo, error) {
+	return c.getDBInfo("t1.dest_server=t2.name_")
+}
+
+func (c *ConfigDAO) GetSrcDBInfo() ([]*DBInfo, error) {
+	return c.getDBInfo("t1.server_=t2.name_")
 }
 
 /*
 获取目标数据库信息
 */
-func (c *ConfigDAO) GetDBInfo() ([]*DBInfo, error) {
-	rows, err := c.db.Query(`select name_,user_, password_,addr_ ,db_ ,type_ from t_config_dbinfo where deleted_="0"`)
+func (c *ConfigDAO) getDBInfo(condition string) ([]*DBInfo, error) {
+	db, err := sql.Open("mysql", GetConfig().ConfigDBAddr)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	sql := fmt.Sprintf(`select t2.name_,t2.user_,t2.password_,t2.addr_ FROM t_config_strategy t1,t_config_dbinfo t2 where %s and t1.deleted_=0`, condition)
+	rows, err := db.Query(sql)
 	if err != nil {
 		logs.Errorf("获取DBInfo错误:%v\n", err)
 		return nil, err
 	}
-	defer rows.Close()
+
 	dbInfos := make([]*DBInfo, 0, 8)
 	for rows.Next() {
 		t := &DBInfo{}
-		err := rows.Scan(&t.Name, &t.User, &t.Password, &t.Addr, &t.DB, &t.DBType)
+		err := rows.Scan(&t.Name, &t.User, &t.Password, &t.Addr)
 		if err != nil {
 			logs.Errorf("扫描TableSyncInfo记录错误:%v\n", err)
 			continue
 		}
 		dbInfos = append(dbInfos, t)
 	}
+	rows.Close()
 	return dbInfos, nil
 }
 
@@ -93,21 +102,32 @@ func (c *ConfigDAO) GetDBInfo() ([]*DBInfo, error) {
 获取映射策略
 */
 func (c *ConfigDAO) GetAllStrategies() ([]*Strategy, error) {
-	rows, err := c.db.Query(`select dest_server,dest_db, dest_table,path_ ,content_ ,type_ from t_config_strategy where deleted_="0"`)
+	db, err := sql.Open("mysql", GetConfig().ConfigDBAddr)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.Query(`select dest_path,path_ ,content_ ,type_ from t_config_strategy where deleted_="0"`)
 	if err != nil {
 		logs.Errorf("获取Strategy错误:%v\n", err)
 		return nil, err
 	}
-	defer rows.Close()
+
 	strategyList := make([]*Strategy, 0, 8)
 	for rows.Next() {
 		t := &Strategy{}
-		err := rows.Scan(&t.DestServer, &t.DestDB, &t.DestTable, &t.Path, &t.Content, &t.MappingType)
+		err := rows.Scan(&t.DestPath, &t.Path, &t.Content, &t.MappingType)
 		if err != nil {
 			logs.Errorf("扫描Strategy记录错误:%v\n", err)
 			continue
 		}
+		server, db, table := TableInfo(t.DestPath)
+		t.DestServer = server
+		t.DestDB = db
+		t.DestTable = table
+
 		strategyList = append(strategyList, t)
 	}
+	rows.Close()
 	return strategyList, nil
 }

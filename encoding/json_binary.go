@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	_ "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	_ "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go/hack"
 )
 
 const (
@@ -167,7 +166,7 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 				return nil
 			}
 
-			keys[i] = hack.String(data[keyOffset : keyOffset+keyLength])
+			keys[i] = String(data[keyOffset : keyOffset+keyLength])
 		}
 	}
 
@@ -335,7 +334,7 @@ func (d *jsonBinaryDecoder) decodeString(data []byte) string {
 
 	data = data[n:]
 
-	v := hack.String(data[0:l])
+	v := String(data[0:l])
 	return v
 }
 
@@ -363,7 +362,7 @@ func (d *jsonBinaryDecoder) decodeOpaque(data []byte) interface{} {
 	case MYSQL_TYPE_DATE, MYSQL_TYPE_DATETIME, MYSQL_TYPE_TIMESTAMP:
 		return d.decodeDateTime(data)
 	default:
-		return hack.String(data)
+		return String(data)
 	}
 
 	return nil

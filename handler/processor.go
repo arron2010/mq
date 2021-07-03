@@ -41,5 +41,5 @@ func (h *DefaultProcessor) Process(topic string, conflictStrategy string, row *p
 	if err != nil {
 		return err
 	}
-	return h.dbHandler.handle(topic, dataRows, row)
+	return h.dbHandler.handle(topic, conflictStrategy, dataRows, row)
 }

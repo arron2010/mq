@@ -3,7 +3,7 @@ package client
 import (
 	"crypto/tls"
 	"errors"
-	"github.com/asim/mq/glogger"
+	"github.com/asim/mq/logs"
 	"sync"
 	"time"
 
@@ -53,7 +53,7 @@ func ping(addr string) (bool, error) {
 	if resp.Timestamp == 0 {
 		return false, errors.New("sever unavailable")
 	}
-	glogger.Infof("ping timestamp=%d", resp.Timestamp)
+	logs.Infof("ping timestamp=%d", resp.Timestamp)
 	return true, nil
 }
 func grpcPublish(addr, topic string, payload []byte) error {

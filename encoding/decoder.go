@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
-	"github.com/siddontang/go/hack"
+
 	proto2 "github.com/wj596/go-mysql-transfer/proto"
 	"math"
 	"strconv"
@@ -63,7 +63,7 @@ func DecodeProtoRow(row *proto2.Row) ([][]interface{}, error) {
 		needBitmap2 = true
 	}
 	r, err := DecodeRows(row.Val,
-		uint64(len(row.Columns)), row.ColumnBitmap1, row.ColumnBitmap2,
+		uint64(row.ColumnCount), row.ColumnBitmap1, row.ColumnBitmap2,
 		row.ColumnType, row.ColumnMeta, needBitmap2,
 	)
 	return r, err
@@ -353,11 +353,11 @@ func decodeString(data []byte, length int) (v string, n int) {
 		length = int(data[0])
 
 		n = int(length) + 1
-		v = hack.String(data[1:n])
+		v = String(data[1:n])
 	} else {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
-		v = hack.String(data[2:n])
+		v = String(data[2:n])
 	}
 
 	return
@@ -553,11 +553,11 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 	}
 
 	if useDecimal {
-		f, err := decimal.NewFromString(hack.String(res.Bytes()))
+		f, err := decimal.NewFromString(String(res.Bytes()))
 		return f, pos, err
 	}
 
-	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
+	f, err := strconv.ParseFloat(String(res.Bytes()), 64)
 	return f, pos, err
 }
 

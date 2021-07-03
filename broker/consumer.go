@@ -18,10 +18,11 @@ func NewConsumer(topic string) *Consumer {
 }
 
 type Consumer struct {
-	broker     Broker
-	topic      string
-	rowHandler handler.Processor
-	stop       chan struct{}
+	broker           Broker
+	topic            string
+	conflictStrategy string
+	rowHandler       handler.Processor
+	stop             chan struct{}
 }
 
 func (c *Consumer) Run() {
@@ -43,7 +44,7 @@ func (c *Consumer) Run() {
 				if err != nil {
 					logs.Errorf("主题[%s] 消费者序列化失败:%v", c.topic, err)
 				} else {
-					err := c.rowHandler.Process(c.topic, row)
+					err := c.rowHandler.Process(c.topic, c.conflictStrategy, row)
 					if err != nil {
 						logs.Errorf("主题[%s] 处理数据失败:%v", c.topic, err)
 					}
@@ -72,13 +73,10 @@ func NewConsumerManager(dao *config.ConfigDAO) *ConsumerManager {
 	return c
 }
 
-func (c *ConsumerManager) add(topic string, handlerName string) {
+func (c *ConsumerManager) add(topic string, conflictStrategy string) {
 	consumer := NewConsumer(topic)
-	switch handlerName {
-	//TODO: 扩展其他行数据处理
-	default:
-		consumer.rowHandler = handler.NewDefaultHandler(c.dao)
-	}
+	consumer.conflictStrategy = conflictStrategy
+	consumer.rowHandler = handler.NewDefaultProcessor(c.dao)
 	consumer.Run()
 	c.consumers[topic] = consumer
 }

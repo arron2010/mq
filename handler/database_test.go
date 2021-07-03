@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/logs"
+	"github.com/pingcap/errors"
 	"github.com/wj596/go-mysql-transfer/proto"
 	"math/rand"
 	"reflect"
@@ -55,9 +56,13 @@ func TestDBHandler_Insert(t *testing.T) {
 		t.Fatal("失败")
 	}
 	handler := GetDBHandler()
-	t1 := time.Now()
-	id := uint32(rand.New(rand.NewSource(time.Now().UnixNano())).Int31n(9000))
-	rows := []interface{}{id, "a1", "b1", 100, 12.36, t1}
+	now := time.Now()
+	const format = "2006-01-02 15:04:05"
+	myTime := now
+
+	id := uint32(rand.New(rand.NewSource(time.Now().UnixNano())).Int31n(10001))
+
+	rows := []interface{}{2675, "a1", "b1", 300, 12.36, myTime}
 	fmt.Println("自动生成ID-->", id)
 	row := &proto.Row{}
 	row.PKColumns = []uint32{0}
@@ -66,8 +71,11 @@ func TestDBHandler_Insert(t *testing.T) {
 	topic := "/test1/eseap/t_user"
 	tableMapping, _ := handler.getStrategy(topic)
 	tbl, _ := handler.sourceTables[topic]
-	err = handler.insert(rows, 6, tableMapping, tbl)
+	//config.IGNORE_CONFLICT  USE_CONFLICT
+	err = handler.insert(config.IGNORE_CONFLICT, rows, 6, tableMapping, tbl)
 	if err != nil {
+		fmt.Println(errors.ErrorStack(err))
+
 		logs.Errorf("CreateDBHandler错误:%v\n", err)
 	}
 }
@@ -96,28 +104,48 @@ func TestDBHandler_Update(t *testing.T) {
 		t.Fatal("失败")
 	}
 	handler := GetDBHandler()
-	t1 := time.Now()
-	id := 5730
-	old := []interface{}{id, "a1", "b1", 100, 12.36, t1}
-	newRow := []interface{}{id, "a1", "b1", 101, 12.35, t1}
+	t2 := time.Now()
+	const format = "2006-01-02 15:04:05"
+	t1 := t2.Format(format)
+	id := 9858
+	old := []interface{}{id, "a1", "b1", 102, 13.35, t1}
+	newRow := []interface{}{id, "a2", "b2", 103, 13.35, t1}
 	row := &proto.Row{}
 	row.PKColumns = []uint32{0}
-	//row.Columns = []*proto.ColumnInfo{
-	//	{Name: "id", IsAuto: 1},
-	//	{Name: "name"},
-	//	{Name: "desc"},
-	//	{Name: "a"},
-	//	{Name: "b"},
-	//	{Name: "c"},
-	//}
 	topic := "/test1/eseap/t_user"
 	tableMapping, _ := handler.getStrategy(topic)
 	tbl, _ := handler.sourceTables[topic]
-	err = handler.update(old, newRow, tbl, tableMapping)
+	err = handler.update(config.IGNORE_CONFLICT, old, newRow, 6, tbl, tableMapping)
 	if err != nil {
 		logs.Errorf("CreateDBHandler错误:%v\n", err)
 	}
 }
+
+func TestDBHandler_Update2(t *testing.T) {
+	logs.Initialize("/opt/mqlog.txt")
+	err := CreateDBHandler(getDAO())
+	if err != nil {
+		logs.Errorf("CreateDBHandler错误:%v\n", err)
+		t.Fatal("失败")
+	}
+	handler := GetDBHandler()
+	t2 := time.Now()
+	const format = "2006-01-02 15:04:05"
+	t1 := t2.Format(format)
+	id := 9858
+	old := []interface{}{id, "a2", "b2", 103, 13.35, t1}
+	newRow := []interface{}{id, "a2", "b1", nil, 13.35, t1}
+	row := &proto.Row{}
+	row.PKColumns = []uint32{0}
+	topic := "/test1/eseap/t_user"
+	tableMapping, _ := handler.getStrategy(topic)
+	tbl, _ := handler.sourceTables[topic]
+	err = handler.update(config.USE_CONFLICT, old, newRow, 6, tbl, tableMapping)
+	if err != nil {
+		logs.Errorf("CreateDBHandler错误:%v\n", err)
+	}
+}
+
 func TestDBHandler_Delete(t *testing.T) {
 	logs.Initialize("/opt/mqlog.txt")
 	err := CreateDBHandler(getDAO())
@@ -135,7 +163,17 @@ func TestDBHandler_Delete(t *testing.T) {
 	handler.delete(rows, tbl, tableMapping)
 }
 func TestNewDefaultHandler(t *testing.T) {
-	logs.Initialize("/opt/mqlog.txt")
-	logs.Infof("hello %s", "kk")
-	logs.Infof("hello %s", "kk")
+	//loc := time.Local
+	//tt := time.Now()
+	//
+	//fmt.Println(	tt.In(loc).String())
+	//
+	//id := uint32(rand.New(rand.NewSource(time.Now().UnixNano())).Int31n(10000))
+	//fmt.Println(id)
+	err := errors.New("aaaa")
+	errors.Trace(err)
+	fmt.Printf("%+v", err)
+	//logs.Initialize("/opt/mqlog.txt")
+	//logs.Infof("hello %s", "kk")
+	//logs.Infof("hello %s", "kk")
 }

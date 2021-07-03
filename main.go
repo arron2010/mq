@@ -7,6 +7,8 @@ import (
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/handler"
 	"github.com/asim/mq/logs"
+	"github.com/asim/mq/server/http"
+	"github.com/asim/mq/server/stream"
 	"log"
 	"os"
 	"strings"
@@ -20,7 +22,6 @@ import (
 	mqselector "github.com/asim/mq/go/client/selector"
 	"github.com/asim/mq/server"
 	grpcsrv "github.com/asim/mq/server/grpc"
-	httpsrv "github.com/asim/mq/server/http"
 )
 
 var (
@@ -34,6 +35,7 @@ var (
 	// proxy flags
 	proxy   = flag.Bool("proxy", false, "Proxy for an MQ cluster")
 	retries = flag.Int("retries", 1, "Number of retries for publish or subscribe")
+	id      = flag.Int("id", 1, "节点id")
 	servers = flag.String("servers", "", "Comma separated MQ cluster list used by Proxy")
 
 	// client flags
@@ -48,7 +50,7 @@ var (
 	// resolver for discovery
 	resolver = flag.String("resolver", "ip", "Server resolver for discovery. Supports ip, dns")
 	// transport http or grpc
-	transport = flag.String("transport", "grpc", "Transport for communication. Support http, grpc")
+	transport = flag.String("transport", "stream", "Transport for communication. Support http, grpc")
 
 	configFile = flag.String("config", "mq.yml", "Config subscriber")
 )
@@ -241,9 +243,13 @@ func main() {
 	case "grpc":
 		log.Println("GRPC transport enabled")
 		server = grpcsrv.New(options...)
+	case "stream":
+		log.Println("Stream transport enabled")
+		server = stream.NewStream(*id)
 	default:
 		log.Println("HTTP transport enabled")
-		server = httpsrv.New(options...)
+		server = http.New(options...)
+
 	}
 
 	log.Println("MQ listening on", *address)

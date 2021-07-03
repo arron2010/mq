@@ -27,6 +27,7 @@ func NewDBConn(hostname string, user string, password string, serverID uint32, p
 		password,
 		"",
 		func(clientConn *client.Conn) (*client.Conn, error) {
+			logs.Infof("%d |%s连接创建成功 Connection Id:%d ", serverID, hostname, clientConn.GetConnectionID())
 			var err error
 			if err = writeRegisterSlaveCommand(clientConn, hostname, user, password, serverID, port); err != nil {
 				logs.Errorf("%s 无法注册为从属服务器", addr)
@@ -42,8 +43,7 @@ func NewDBConn(hostname string, user string, password string, serverID uint32, p
 				logs.Errorf("%s 已注册的属服务器，无法关闭binlog", addr)
 				return nil, err
 			}
-
-			logs.Infof("%s连接创建成功", hostname)
+			//fmt.Println("连接创建成功")
 			return clientConn, nil
 
 		})

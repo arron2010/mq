@@ -17,6 +17,10 @@ func Infof(template string, args ...interface{}) {
 	_logger.Infof(template, args...)
 }
 
+func Info(args ...interface{}) {
+	_logger.Info(args...)
+}
+
 func Warnf(template string, args ...interface{}) {
 	_logger.Warnf(template, args...)
 }

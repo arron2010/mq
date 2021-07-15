@@ -25,3 +25,5 @@ func Slice(s string) (b []byte) {
 	pbytes.Cap = pstring.Len
 	return
 }
+
+//func IntToBytes()

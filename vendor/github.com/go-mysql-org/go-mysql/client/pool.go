@@ -274,7 +274,7 @@ func (pool *Pool) getConnection(ctx context.Context) (Connection, error) {
 
 	select {
 	case connection := <-pool.readyConnection:
-		fmt.Println("getConnection--->connection := <-pool.readyConnection-->274")
+		//fmt.Println("getConnection--->connection := <-pool.readyConnection-->274")
 		return connection, nil
 	case <-ctx.Done():
 		return Connection{}, ctx.Err()
@@ -325,7 +325,7 @@ func (pool *Pool) newConnectionProducer() {
 		}
 
 		pool.readyConnection <- connection
-		fmt.Println("newConnectionProducer-->pool.readyConnection <- connection-->", 326)
+		//fmt.Println("newConnectionProducer-->pool.readyConnection <- connection-->", 326)
 	}
 }
 

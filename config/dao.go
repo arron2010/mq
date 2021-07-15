@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/asim/mq/logs"
 	_ "github.com/go-sql-driver/mysql"
+	"strings"
 )
 
 const (
@@ -77,7 +78,7 @@ func (c *ConfigDAO) getDBInfo(condition string) ([]*DBInfo, error) {
 		return nil, err
 	}
 	defer db.Close()
-	sql := fmt.Sprintf(`select t2.name_,t2.user_,t2.password_,t2.addr_ FROM t_config_strategy t1,t_config_dbinfo t2 where %s and t1.deleted_=0`, condition)
+	sql := fmt.Sprintf(`select t2.name_,t2.user_,t2.password_,t2.addr_ FROM t_config_strategy t1,t_config_dbinfo t2 where %s and t2.deleted_=0`, condition)
 	rows, err := db.Query(sql)
 	if err != nil {
 		logs.Errorf("获取DBInfo错误:%v\n", err)
@@ -116,7 +117,9 @@ func (c *ConfigDAO) GetAllStrategies() ([]*Strategy, error) {
 	strategyList := make([]*Strategy, 0, 8)
 	for rows.Next() {
 		t := &Strategy{}
+
 		err := rows.Scan(&t.DestPath, &t.Path, &t.Content, &t.MappingType)
+		t.Content = strings.Trim(t.Content, " ")
 		if err != nil {
 			logs.Errorf("扫描Strategy记录错误:%v\n", err)
 			continue

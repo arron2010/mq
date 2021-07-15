@@ -354,6 +354,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			&unused,
 			&unused,
 			&unused,
+			&unused,
 		)
 		if err != nil {
 			return errors.Trace(err)

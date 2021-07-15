@@ -43,7 +43,7 @@ func TestDBConn_Execute(t *testing.T) {
 			//	return
 			//}
 			//c.Close()
-			conn.pool.PutConn(c)
+			//conn.pool.PutConn(c)
 			fmt.Println("成功------>", i)
 		}()
 

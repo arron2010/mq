@@ -7,13 +7,10 @@ import (
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/logs"
 	"github.com/go-mysql-org/go-mysql/schema"
-	"math/rand"
-	"strconv"
-	"time"
-
 	"github.com/pingcap/errors"
 	proto2 "github.com/wj596/go-mysql-transfer/proto"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -53,14 +50,13 @@ func CreateDBHandler(dao *config.ConfigDAO) error {
 	if err != nil {
 		return err
 	}
-	for _, dbInfo := range dbList {
-		serverId := uint32(rand.New(rand.NewSource(time.Now().UnixNano())).Int31n(1000)) + common.MIN_REPLICATION_SLAVE
+	for i, dbInfo := range dbList {
+		serverId := uint32(i+1)*2 + common.MIN_REPLICATION_SLAVE
 		addrInfo := strings.Split(dbInfo.Addr, ":")
 		port, _ := strconv.ParseInt(addrInfo[1], 10, 64)
 		conn := NewDBConn(addrInfo[0], dbInfo.User, dbInfo.Password, uint32(serverId), uint16(port))
 		_dbHandler.conns[dbInfo.Name] = conn
 	}
-
 	strategyList, err := dao.GetAllStrategies()
 	if err != nil {
 		return err

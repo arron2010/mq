@@ -18,10 +18,12 @@ const (
 
 type Config struct {
 	ConfigDBAddr string `yaml:"config_db_addr"`
+	MinOpenConns int    `yaml:"min_open_conns"`
 	MaxOpenConns int    `yaml:"max_open_conns"`
 	MaxIdleConns int    `yaml:"max_idle_conns"`
 	LogFile      string `yaml:"log_file_path"`
 	Peers        string `yaml:"peers"`
+	DataPath     string `yaml:"topic_db_path"`
 }
 
 /*

@@ -19,7 +19,7 @@ func NewDBConn(hostname string, user string, password string, serverID uint32, p
 	cfg := config.GetConfig()
 	addr := fmt.Sprintf("%s:%d", hostname, port)
 	conn.pool = client.NewPoolEx(logs.Infof,
-		cfg.MaxOpenConns/2,
+		cfg.MinOpenConns,
 		cfg.MaxOpenConns,
 		cfg.MaxIdleConns,
 		addr,
@@ -30,20 +30,20 @@ func NewDBConn(hostname string, user string, password string, serverID uint32, p
 			logs.Infof("%d |%s连接创建成功 Connection Id:%d ", serverID, hostname, clientConn.GetConnectionID())
 			var err error
 			if err = writeRegisterSlaveCommand(clientConn, hostname, user, password, serverID, port); err != nil {
-				logs.Errorf("%s 无法注册为从属服务器", addr)
+				logs.Errorf("%s 无法注册为从属服务器，错误:%v", addr, err)
 				return nil, err
 			}
 
 			if _, err = clientConn.ReadOKPacket(); err != nil {
-				logs.Errorf("%s 已注册的属服务器，无法读取数据包", addr)
+				logs.Errorf("%s 无法读取数据包，错误:%v", addr, err)
 				return nil, err
 			}
 
-			if _, err = clientConn.Execute("set sql_log_bin=0;"); err != nil {
-				logs.Errorf("%s 已注册的属服务器，无法关闭binlog", addr)
-				return nil, err
-			}
-			//fmt.Println("连接创建成功")
+			//if _, err = clientConn.Execute("set sql_log_bin=0;"); err != nil {
+			//	logs.Errorf("%s 无法关闭binlog，错误:%v", addr,err)
+			//	return nil, err
+			//}
+
 			return clientConn, nil
 
 		})

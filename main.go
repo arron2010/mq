@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/asim/mq/common"
 	"github.com/asim/mq/config"
 	"github.com/asim/mq/handler"
 	"github.com/asim/mq/logs"
@@ -30,7 +31,7 @@ var (
 	key     = flag.String("key_file", "", "TLS key file")
 
 	// server persist to file
-	persist = flag.Bool("persist", false, "Persist messages to [topic].mq file per topic")
+	persist = flag.Bool("persist", true, "Persist messages to [topic].mq file per topic")
 
 	// proxy flags
 	proxy   = flag.Bool("proxy", false, "Proxy for an MQ cluster")
@@ -53,6 +54,10 @@ var (
 	transport = flag.String("transport", "stream", "Transport for communication. Support http, grpc")
 
 	configFile = flag.String("config", "mq.yml", "Config subscriber")
+
+	consumer = flag.Bool("consumer", true, "是否启动数据同步消费者")
+
+	dataPath = flag.String("data_path", "/opt/mq/", "消费者数据文件路径")
 )
 
 func init() {
@@ -76,6 +81,11 @@ func init() {
 
 	if (*client || *interactive) && len(*servers) == 0 {
 		*servers = "localhost:8081"
+	}
+	err := config.LoadConfig(*configFile)
+	if err != nil {
+		log.Fatal("配置文件加载失败：", err)
+		return
 	}
 
 	var bclient mqclient.Client
@@ -116,12 +126,13 @@ func init() {
 		broker.ETCDDialTimeout(5*time.Second),
 		broker.ETCDAddresses([]string{"127.0.0.1:2379"}),
 	)
-	/*初始化消费者和配置信息*/
-	err := initialize()
-	if err != nil {
-		panic(err)
+	/*初始化消费者*/
+	if *consumer {
+		err = initializConsumer()
+		if err != nil {
+			logs.Errorf("数据同步消费者初始化失败：%+v", err)
+		}
 	}
-
 }
 
 func cli() {
@@ -181,15 +192,16 @@ func cli() {
 
 	wg.Wait()
 }
-func initialize() error {
+
+func initializConsumer() error {
 	var err error
 	var c *broker.ConsumerManager
 	var dao *config.ConfigDAO
-	err = config.LoadConfig(*configFile)
-	if err != nil {
-		panic(err)
-	}
+
+	config.GetConfig().DataPath = *dataPath
 	logs.Initialize(config.GetConfig().LogFile)
+	common.InitBolt(config.GetConfig().DataPath + "topic.db")
+
 	dao, err = config.NewConfigDAO()
 	if err != nil {
 		logs.Errorf("数据库连接发生错误！")
@@ -208,6 +220,10 @@ func initialize() error {
 	}
 	c.Load()
 
+	if err != nil {
+		logs.Errorf("消费主题的数据库初始化失败！")
+		return err
+	}
 	return nil
 }
 
